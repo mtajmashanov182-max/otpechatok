@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ОТПЕЧАТОК — что браузер рассказывает о тебе</title>
+<style>
+:root{
+  --bg:#04070a; --panel:#070c11; --line:#12212a; --line2:#0d1a20;
+  --txt:#a9e8c4; --dim:#4b7364; --acc:#38ff9c; --warn:#ffb454; --bad:#ff5f6d; --cyan:#5ce1ff;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--txt);
+  font-family:'JetBrains Mono','Cascadia Mono','Consolas',ui-monospace,'Courier New',monospace;
+  font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+body::before{
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:9;
+  background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0 2px,rgba(0,0,0,.22) 2px 3px);
+  mix-blend-mode:multiply;
+}
+body::after{
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:8;
+  background:radial-gradient(ellipse at 50% 40%,rgba(0,0,0,0) 30%,rgba(0,0,0,.75) 100%);
+}
+.wrap{position:relative; z-index:10; max-width:920px; margin:0 auto; padding:22px 16px 60px}
+
+/* ---------- шапка ---------- */
+.top{display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  border:1px solid var(--line); background:linear-gradient(180deg,#0a1218,#060a0e);
+  padding:10px 14px; border-radius:8px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--acc);box-shadow:0 0 10px var(--acc);
+  animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+.title{font-weight:700; letter-spacing:.14em; color:#eafff4; font-size:13px}
+.title span{color:var(--acc)}
+.badge{margin-left:auto; font-size:11px; letter-spacing:.08em; color:var(--cyan);
+  border:1px solid rgba(92,225,255,.35); background:rgba(92,225,255,.06);
+  padding:3px 9px; border-radius:20px}
+.clock{font-size:11px;color:var(--dim)}
+
+/* ---------- прогресс ---------- */
+.bar{margin-top:14px; height:3px; background:var(--line2); border-radius:3px; overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--acc),var(--cyan));
+  box-shadow:0 0 12px var(--acc); transition:width .18s ease}
+.barinfo{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin-top:6px}
+
+/* ---------- терминал ---------- */
+.term{margin-top:14px; border:1px solid var(--line); border-radius:8px; background:var(--panel);
+  padding:16px; min-height:300px}
+.start{display:none}
+.start.on{display:block; animation:fade .3s ease both}
+.start__line{color:var(--dim); font-size:12.5px; padding:1px 0}
+.start__line b{color:var(--txt); font-weight:400}
+.start__what{margin:14px 0 14px; font-size:12.5px; color:var(--dim); line-height:1.7; max-width:62ch}
+.start__what b{color:var(--txt); font-weight:400}
+.start__warn{margin:0 0 18px; padding:11px 13px; max-width:66ch; font-size:12.5px; line-height:1.6;
+  color:var(--dim); border:1px solid rgba(255,180,84,.4); border-left-width:3px; border-radius:6px;
+  background:rgba(255,180,84,.07)}
+.start__warn b{color:var(--warn); font-weight:400}
+
+.boot{color:var(--dim); font-size:12.5px}
+.boot b{color:var(--txt);font-weight:400}
+.cat{margin:18px 0 8px; color:var(--cyan); font-size:11px; letter-spacing:.22em; opacity:.9;
+  display:flex; align-items:center; gap:10px; animation:fade .3s ease both}
+.cat::after{content:''; flex:1; height:1px; background:linear-gradient(90deg,rgba(92,225,255,.35),transparent)}
+.cat:first-child{margin-top:6px}
+.row{display:flex; align-items:baseline; gap:8px; padding:1.5px 0; animation:fade .28s ease both}
+@keyframes fade{from{opacity:0; transform:translateX(-8px)} to{opacity:1; transform:none}}
+.mark{color:var(--acc); font-size:11px; flex:none}
+.row.warn .mark{color:var(--warn)}
+.row.bad .mark{color:var(--bad)}
+.label{color:var(--dim); white-space:nowrap}
+.dots{flex:1; border-bottom:1px dotted #17303a; transform:translateY(-3px); min-width:14px}
+.val{color:#dcfff0; text-align:right; word-break:break-word; max-width:62%}
+.row.warn .val{color:var(--warn)}
+.row.bad .val{color:var(--bad)}
+.val.flash{animation:flash .5s ease}
+@keyframes flash{from{background:rgba(56,255,156,.28)} to{background:transparent}}
+.cursor{display:inline-block;width:8px;height:14px;background:var(--acc);vertical-align:-2px;
+  animation:blink 1s steps(1) infinite; box-shadow:0 0 10px var(--acc)}
+@keyframes blink{50%{opacity:0}}
+
+/* ---------- итог ---------- */
+.summary{margin-top:20px; border:1px solid rgba(56,255,156,.35); border-radius:8px;
+  background:linear-gradient(180deg,rgba(56,255,156,.05),rgba(56,255,156,.01));
+  padding:18px; display:none}
+.summary.on{display:block; animation:fade .5s ease both}
+.summary h2{margin:0 0 4px; font-size:11px; letter-spacing:.22em; color:var(--acc); font-weight:400}
+.fpid{font-size:clamp(20px,5.6vw,34px); letter-spacing:.1em; color:#eafff4; font-weight:700;
+  text-shadow:0 0 26px rgba(56,255,156,.5); margin:6px 0 2px; word-break:break-all}
+.hint{font-size:12px; color:var(--dim)}
+.stats{display:flex; gap:10px; flex-wrap:wrap; margin:14px 0 6px}
+.stat{border:1px solid var(--line); border-radius:6px; padding:8px 12px; background:rgba(0,0,0,.3)}
+.stat b{display:block; font-size:19px; color:var(--acc); font-weight:700; line-height:1.2}
+.stat span{font-size:10.5px; color:var(--dim); letter-spacing:.06em}
+
+/* ---------- отправка ---------- */
+.report{display:none; margin-top:22px; border:1px solid rgba(92,225,255,.35); border-radius:8px;
+  background:linear-gradient(180deg,rgba(92,225,255,.05),transparent); padding:18px}
+.report.on{display:block; animation:fade .5s ease both}
+.report h2{margin:0 0 8px; font-size:11px; letter-spacing:.22em; color:var(--cyan); font-weight:400}
+.rhint{margin:0 0 14px; font-size:12.5px; color:var(--dim); line-height:1.65}
+.rhint b{color:var(--warn); font-weight:400}
+.rrow{display:flex; gap:10px; flex-wrap:wrap}
+.rrow input{flex:1; min-width:180px; font-family:inherit; font-size:12px; color:var(--txt);
+  background:rgba(0,0,0,.45); border:1px solid var(--line); border-radius:6px; padding:9px 12px; outline:none}
+.rrow input:focus{border-color:rgba(92,225,255,.5)}
+.rrow input::placeholder{color:#3d5c52}
+#send{color:var(--cyan); border-color:rgba(92,225,255,.45); background:rgba(92,225,255,.07)}
+#send:hover{background:rgba(92,225,255,.16); box-shadow:0 0 18px rgba(92,225,255,.25)}
+#send:disabled{opacity:.45; cursor:default; box-shadow:none}
+.preview{margin:14px 0 0; padding:12px; max-height:230px; overflow:auto; font-family:inherit;
+  font-size:11.5px; line-height:1.55; color:#8fbfae; background:rgba(0,0,0,.45);
+  border:1px solid var(--line2); border-radius:6px; white-space:pre-wrap; word-break:break-word}
+.rstatus{margin-top:10px; font-size:12px; color:var(--dim); min-height:18px}
+.rstatus.ok{color:var(--acc)}
+.rstatus.err{color:var(--bad)}
+.rstatus.wait{color:var(--warn)}
+
+/* ---------- низ ---------- */
+.actions{display:flex; gap:10px; flex-wrap:wrap; margin-top:18px}
+button{font-family:inherit; font-size:12px; letter-spacing:.08em; color:var(--acc); cursor:pointer;
+  background:rgba(56,255,156,.06); border:1px solid rgba(56,255,156,.4); border-radius:6px;
+  padding:9px 16px; transition:.15s}
+button:hover{background:rgba(56,255,156,.16); box-shadow:0 0 18px rgba(56,255,156,.25)}
+button:active{transform:translateY(1px)}
+button.ghost{color:var(--dim); border-color:var(--line); background:transparent}
+button.ghost:hover{color:var(--txt); background:rgba(255,255,255,.03); box-shadow:none}
+.foot{margin-top:16px; font-size:11.5px; color:var(--dim); line-height:1.7;
+  border-top:1px dashed var(--line); padding-top:14px}
+.foot b{color:var(--txt);font-weight:400}
+@media(max-width:520px){
+  .val{max-width:100%; text-align:left}
+  .row{flex-wrap:wrap}
+  .dots{display:none}
+  .label{flex:none; width:100%; color:#6f9c8a}
+  .val{width:100%; padding-left:16px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <div class="dot"></div>
+    <div class="title">ОТПЕЧАТОК<span>_</span>браузера</div>
+    <div class="clock" id="clock">--:--:--</div>
+    <div class="badge">нажатие кнопки</div>
+  </div>
+
+  <div class="bar"><i id="prog"></i></div>
+  <div class="barinfo">
+    <span id="phase">скан не запущен</span>
+    <span id="counter">0 признаков</span>
+  </div>
+
+  <div class="term" id="term">
+    <div class="start" id="start">
+      <div class="start__line">&gt; сканер отпечатка <b>v1.4</b> готов</div>
+      <div class="start__line">&gt; пока ничего не снято — жду твоего слова</div>
+      <p class="start__what">
+        По кнопке страница прочитает то, что браузер отдаёт любой странице: IP и примерный город,
+        устройство и видеокарту, шрифты, отпечаток.
+      </p>
+      <p class="start__warn">
+        <b>Нажатие кнопки сразу отправит всё это автору страницы в Telegram.</b>
+      </p>
+      <div class="rrow">
+        <button id="go">НАЧАТЬ СКАН</button>
+      </div>
+    </div>
+    <div class="boot" id="boot"></div>
+    <div id="out"></div>
+  </div>
+
+  <div class="summary" id="summary">
+    <h2>ЦИФРОВОЙ ОТПЕЧАТОК</h2>
+    <div class="fpid" id="fpid">····-····-····-····</div>
+    <div class="hint">Это идентификатор, который собирается из твоих железяк и настроек.
+      Куки почистить можно — а видеокарту и шрифты не почистишь.</div>
+    <div class="stats">
+      <div class="stat"><b id="s-total">0</b><span>ПРИЗНАКОВ СОБРАНО</span></div>
+      <div class="stat"><b id="s-uniq">0</b><span>ПОЧТИ УНИКАЛЬНЫХ</span></div>
+      <div class="stat"><b id="s-time">0с</b><span>ВРЕМЯ СБОРА</span></div>
+    </div>
+    <div class="hint" id="verdict"></div>
+  </div>
+  <div class="report" id="report">
+    <h2>принятие</h2>
+  
+    <p class="rhint">
+    </p>
+    <div class="rrow">
+      <button id="send">ОТПРАВИТЬ ЕЩЁ РАЗ</button>
+    </div>
+    <pre class="preview" id="preview">сканирую…</pre>
+    <div class="rstatus" id="rstatus"></div>
+  </div>
+
+  <div class="actions">
+    <button id="copy">СКОПИРОВАТЬ ВСЁ</button>
+    <button class="ghost" id="again">ПРОГНАТЬ ЕЩЁ РАЗ</button>
+  </div>
+
+  <div class="foot">
+    <b>Что здесь происходит.</b> Страница читает только то, что браузер отдаёт любой странице по умолчанию —
+    без единого запроса разрешения. Ничего не сохраняется на диске и всё исчезает при закрытии вкладки.<br><br>
+    <b>Внешних запросов ровно два.</b> Первый — к сервису геолокации по IP (<b>ipapi.co</b>, при сбое ipwho.is,
+    ipwhois.app или ipify.org): он нужен, чтобы показать тебе твой же IP и город. Он уходит сразу при открытии
+    страницы. Второй — когда ты нажимаешь «НАЧАТЬ СКАН И ОТПРАВИТЬ»: вместе с запуском скана собранное
+    уходит автору страницы в его бот. До нажатия не уходит ничего, а после — в блоке ниже видно ровно тот
+    текст, который ушёл.<br><br>
+    Уникальность таких наборов данных изучали в EFF Panopticlick и последующих работах: на типичном компьютере
+    комбинация «видеокарта + шрифты + разрешение + часовой пояс + язык» различает устройство в 80–95% случаев.
+    Именно так работают антифрод-системы банков и рекламные трекеры.
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* ============================================================
+   АДРЕС ВОРКЕРА. После `npx wrangler deploy` вставь сюда свой адрес.
+   Пока тут стоит заглушка со скобками < >, кнопка отправки ничего не
+   делает и честно об этом пишет.
+   ============================================================ */
+const REPORT_URL = 'https://otpechatok-relay.mtajmashanov182.workers.dev/report';
+
+// Время фиксируется один раз — когда скан закончился. Если штамповать его
+// при каждой отрисовке, предпросмотр разойдётся с отправленным текстом,
+// и обещание «слово в слово» станет враньём.
+let scanTs = null;
+
+/* ==================== УТИЛИТЫ ==================== */
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+function hash(str){
+  let a = 0x811c9dc5, b = 0x2545f491;
+  for (let i = 0; i < str.length; i++){
+    const c = str.charCodeAt(i);
+    a = Math.imul(a ^ c, 0x01000193) >>> 0;
+    b = Math.imul(b + c, 0x85ebca6b) >>> 0;
+  }
+  return (a.toString(16).padStart(8,'0') + b.toString(16).padStart(8,'0'));
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// fetch с таймаутом — иначе при мёртвой сети страница виснет навсегда
+async function fetchT(url, ms){
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), ms);
+  try { return await fetch(url, { signal: ac.signal, cache: 'no-store' }); }
+  finally { clearTimeout(t); }
+}
+// страховка на случай, если зонд вообще не отвечает
+const TIMEOUT = Symbol('timeout');
+const guard = (p, ms) => Promise.race([p, sleep(ms).then(() => TIMEOUT)]);
+// заглушки — это «данных нет», их не считаем за собранные признаки
+const isPlaceholder = v => v === '—' || v === 'скрыто' || v === 'заблокирован' || v === 'ошибка'
+  || v === 'не поддерживается' || v === 'недоступно'
+  || /^(сервис не ответил|нет ответа|запрос не удался|не проверить|не проверяется)/.test(v);
+
+/* ==================== ГЕОЛОКАЦИЯ ПО IP ==================== */
+/* Сервисы перебираются по очереди: у части бесплатных тарифов CORS закрыт
+   (ipwho.is на free-плане умеет отдать 403 «CORS is not supported»),
+   поэтому первым идёт тот, что отдаёт CORS стабильно. */
+let _geo = null;
+function geo(){
+  if (!_geo) _geo = (async () => {
+    const tries = [
+      async () => {
+        const r = await fetchT('https://ipapi.co/json/', 2500);
+        const j = await r.json();
+        if (!j || !j.ip) throw new Error('bad');
+        return { src:'ipapi.co', ip:j.ip, type:j.version, country:j.country_name, city:j.city,
+                 region:j.region, postal:j.postal, isp:j.org, org:j.org, asn:j.asn,
+                 tz:j.timezone, utc:j.utc_offset, lat:j.latitude, lon:j.longitude };
+      },
+      async () => {
+        const r = await fetchT('https://ipwho.is/', 2500);
+        const j = await r.json();
+        if (!j || j.success === false || !j.ip) throw new Error('bad');
+        return { src:'ipwho.is', ip:j.ip, type:j.type, country:j.country, city:j.city,
+                 region:j.region, postal:j.postal, isp:j.connection && j.connection.isp,
+                 org:j.connection && j.connection.org, asn:j.connection && j.connection.asn,
+                 tz:j.timezone && j.timezone.id, utc:j.timezone && j.timezone.utc,
+                 lat:j.latitude, lon:j.longitude };
+      },
+      async () => {
+        const r = await fetchT('https://ipwhois.app/json/', 2500);
+        const j = await r.json();
+        if (!j || !j.ip) throw new Error('bad');
+        return { src:'ipwhois.app', ip:j.ip, type:j.type, country:j.country, city:j.city,
+                 region:j.region, postal:j.postal, isp:j.isp, org:j.org, asn:j.asn,
+                 tz:j.timezone, utc:j.timezone_gmt, lat:j.latitude, lon:j.longitude };
+      },
+      async () => {
+        const r = await fetchT('https://api.ipify.org?format=json', 2500);
+        const j = await r.json();
+        if (!j || !j.ip) throw new Error('bad');
+        return { src:'ipify.org (только IP, остальное не отдаёт)', ip:j.ip };
+      }
+    ];
+    for (const t of tries){
+      try { return { ok:true, d: await t() }; } catch (e) {}
+    }
+    return { ok:false, why:'сервис не ответил (нет сети или всё заблокировано)' };
+  })();
+  return _geo;
+}
+const gv = (d, k, fb) => (d && d[k] !== undefined && d[k] !== null && d[k] !== '') ? d[k] : (fb || '—');
+const gwhy = g => (g && g.why) || 'запрос не удался';
+
+/* ==================== ОТПЕЧАТКИ ==================== */
+function canvasFp(){
+  try {
+    const c = document.createElement('canvas');
+    c.width = 260; c.height = 60;
+    const x = c.getContext('2d');
+    if (!x) return null;
+    x.textBaseline = 'top';
+    x.fillStyle = '#f60'; x.fillRect(0, 0, 130, 30);
+    x.fillStyle = '#069'; x.fillRect(0, 15, 130, 30);
+    x.fillStyle = 'rgba(102,204,0,0.65)';
+    x.font = '17px "Times New Roman"';
+    x.fillText('Отпечаток 🖐 ' + navigator.language, 2, 2);
+    x.font = '15px "Comic Sans MS", cursive';
+    x.fillText('Отпечаток 🖐 ' + navigator.language, 4, 20);
+    x.globalCompositeOperation = 'multiply';
+    x.fillStyle = 'rgb(255,0,255)';
+    x.beginPath(); x.arc(60, 30, 22, 0, Math.PI * 2, true); x.closePath(); x.fill();
+    x.fillStyle = 'rgba(0,255,255,0.4)';
+    x.beginPath(); x.arc(70, 24, 18, 0, Math.PI * 2, true); x.closePath(); x.fill();
+    return c.toDataURL();
+  } catch (e) { return null; }
+}
+
+function webglInfo(){
+  try {
+    const c = document.createElement('canvas');
+    const gl = c.getContext('webgl') || c.getContext('experimental-webgl');
+    if (!gl) return null;
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    const vendor   = dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL)   : gl.getParameter(gl.VENDOR);
+    const renderer = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+    // немножко рисуем — драйверы округляют по-разному
+    const vs = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.0,1.0);}';
+    const fs = 'precision highp float;void main(){float d=gl_FragCoord.x*0.01;gl_FragColor=vec4(d,sin(d*3.0),0.25,1.0);}';
+    const mk = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); return o; };
+    const prog = gl.createProgram();
+    gl.attachShader(prog, mk(gl.VERTEX_SHADER, vs));
+    gl.attachShader(prog, mk(gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(prog); gl.useProgram(prog);
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, 0,1]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(prog, 'p');
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    gl.clearColor(0.1, 0.2, 0.3, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    const px = new Uint8Array(c.width * c.height * 4);
+    gl.readPixels(0, 0, c.width, c.height, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    let s = 0; for (let i = 0; i < px.length; i += 137) s += px[i];
+    return { vendor, renderer, debugExt: !!dbg, hash: hash(px.join(',') + s) };
+  } catch (e) { return null; }
+}
+
+async function audioFp(){
+  try {
+    const AC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!AC) return null;
+    const ctx = new AC(1, 44100, 44100);
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle'; osc.frequency.value = 10000;
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -50; comp.knee.value = 40; comp.ratio.value = 12;
+    comp.attack.value = 0; comp.release.value = 0.25;
+    osc.connect(comp); comp.connect(ctx.destination); osc.start(0);
+    const buf = await ctx.startRendering();
+    const d = buf.getChannelData(0);
+    let sum = 0;
+    for (let i = 4500; i < 5000; i++) sum += Math.abs(d[i]);
+    return sum.toFixed(8);
+  } catch (e) { return null; }
+}
+
+const FONTS = ['Arial','Arial Black','Comic Sans MS','Courier New','Georgia','Impact','Segoe UI',
+ 'Tahoma','Times New Roman','Trebuchet MS','Verdana','Roboto','Ubuntu','Helvetica Neue','Calibri',
+ 'Cambria','Consolas','Menlo','Monaco','JetBrains Mono','Fira Code','Noto Sans','PT Sans','PT Serif',
+ 'Marlett','Wingdings','Bahnschrift','Candara','Corbel','Ebrima','Franklin Gothic Medium','Gabriola',
+ 'Gadugi','Leelawadee UI','Lucida Console','Malgun Gothic','Microsoft YaHei','Mongolian Baiti',
+ 'MS Gothic','MV Boli','Myanmar Text','Nirmala UI','Palatino Linotype','Segoe MDL2 Assets',
+ 'Segoe Print','Segoe Script','SimSun','Sitka Text','Sylfaen','Symbol','Yu Gothic','Bookman Old Style'];
+
+function detectFonts(){
+  try {
+    const bases = ['monospace','sans-serif','serif'];
+    const s = document.createElement('span');
+    s.style.cssText = 'position:absolute;left:-9999px;top:-9999px;font-size:72px;white-space:nowrap;visibility:hidden';
+    s.textContent = 'mmmmmmmmmmlliWWЖШщЯ@#';
+    document.body.appendChild(s);
+    const base = {};
+    for (const b of bases){ s.style.fontFamily = b; base[b] = s.offsetWidth; }
+    const found = [];
+    for (const f of FONTS){
+      for (const b of bases){
+        s.style.fontFamily = '"' + f + '",' + b;
+        if (s.offsetWidth !== base[b]) { found.push(f); break; }
+      }
+    }
+    s.remove();
+    return found;
+  } catch (e) { return []; }
+}
+
+/* ==================== ПРОЧИЕ ЗОНДЫ ==================== */
+async function perm(name){
+  try {
+    const p = await navigator.permissions.query({ name });
+    return { granted:'разрешено', denied:'запрещено', prompt:'спросит при первом обращении' }[p.state] || p.state;
+  } catch (e) { return 'не поддерживается'; }
+}
+async function media(){
+  try {
+    const d = await navigator.mediaDevices.enumerateDevices();
+    const n = k => d.filter(x => x.kind === k).length;
+    const labels = d.filter(x => x.label).map(x => x.label);
+    return { cam: n('videoinput'), mic: n('audioinput'), spk: n('audiooutput'), labels };
+  } catch (e) { return null; }
+}
+async function battery(){
+  if (!navigator.getBattery) return null;
+  try { return await navigator.getBattery(); } catch (e) { return null; }
+}
+async function storage(){
+  try { return await navigator.storage.estimate(); } catch (e) { return null; }
+}
+// «Windows 10.0.0» вместо человеческого названия выглядит глупо — приводим к нормальному виду
+function osName(d, ua){
+  if (!d || !d.platform) return uaParse(ua);
+  const p = d.platform, v = String(d.platformVersion || '');
+  if (p === 'Windows'){
+    if (v.startsWith('10')) return 'Windows 10 / 11 (ядро ' + v + ')';
+    if (v.startsWith('6.3')) return 'Windows 8.1';
+    if (v.startsWith('6.1')) return 'Windows 7';
+    return 'Windows ' + v;
+  }
+  if (p === 'macOS') return 'macOS ' + (v.split('.').slice(0, 2).join('.') || v);
+  if (p === 'Android') return 'Android ' + (v.split('.')[0] || v);
+  if (p === 'Chrome OS') return 'ChromeOS ' + v;
+  if (p === 'iOS' || p === 'iPadOS') return 'iOS ' + (v.split('.').slice(0, 2).join('.') || v);
+  return p + (v ? ' ' + v : '');
+}
+// ipapi.co и ipwhois.app отдают asn уже с префиксом AS — иначе выходило «ASAS12345»
+const cleanAsn = a => String(a || '').replace(/^AS\s*/i, '');
+
+function uaParse(ua){
+  const t = [
+    [/Windows NT 10\.0/, 'Windows 10 / 11'],
+    [/Windows NT 6\.3/, 'Windows 8.1'], [/Windows NT 6\.1/, 'Windows 7'],
+    [/Android ([\d.]+)/, (m) => 'Android ' + m[1]],
+    [/(iPhone|iPad|iPod)/, 'iOS'],
+    [/Mac OS X ([\d_]+)/, (m) => 'macOS ' + m[1].replace(/_/g, '.')],
+    [/CrOS/, 'ChromeOS'], [/Linux/, 'Linux'], [/Windows/, 'Windows']
+  ];
+  for (const [re, v] of t){
+    const m = ua.match(re);
+    if (m) return typeof v === 'function' ? v(m) : v;
+  }
+  return 'неизвестно';
+}
+
+/* ==================== СПИСОК ПРОВЕРОК ==================== */
+const R = {};                       // кэш результатов
+const uniqKeys = [];                // что считаем «почти уникальным»
+
+const CHECKS = [
+  { cat:'СЕТЬ И ПРОВАЙДЕР' },
+  { label:'IP-адрес', run: async () => { const g = await geo(); return g.ok ? g.d.ip : gwhy(g); }, uniq:true },
+  { label:'Тип адреса', run: async () => { const g = await geo(); return g.ok ? gv(g.d,'type','—') : gwhy(g); } },
+  { label:'Провайдер', run: async () => { const g = await geo(); return g.ok ? gv(g.d,'isp') : gwhy(g); }, uniq:true },
+  { label:'Организация / сеть', run: async () => { const g = await geo();
+      if (!g.ok) return gwhy(g);
+      const a = cleanAsn(g.d.asn);
+      return gv(g.d,'org') + (a ? ' · AS' + a : '');
+    } },
+  { label:'Страна', run: async () => { const g = await geo(); return g.ok ? gv(g.d,'country') : gwhy(g); } },
+  { label:'Город / регион', run: async () => { const g = await geo(); return g.ok ? (gv(g.d,'city') + ', ' + gv(g.d,'region')) : gwhy(g); }, uniq:true },
+  { label:'Почтовый индекс', run: async () => { const g = await geo(); return g.ok ? gv(g.d,'postal') : gwhy(g); }, uniq:true },
+  { label:'Примерные координаты', run: async () => { const g = await geo(); return (g.ok && g.d.lat != null) ? (Number(g.d.lat).toFixed(3) + ', ' + Number(g.d.lon).toFixed(3)) : gwhy(g); } },
+  { label:'Часовой пояс по IP', run: async () => { const g = await geo(); return g.ok ? gv(g.d,'tz') : gwhy(g); } },
+  { label:'Откуда взяты данные', run: async () => { const g = await geo(); return g.ok ? g.d.src : '—'; } },
+
+  { cat:'УСТРОЙСТВО И СИСТЕМА' },
+  { label:'Операционная система', run: async () => osName(await R.uad, navigator.userAgent), uniq:true },
+  { label:'Платформа', run: () => navigator.platform || '—' },
+  { label:'Архитектура', run: async () => { const d = await R.uad; return (d && d.architecture) ? (d.architecture + (d.bitness ? ', ' + d.bitness + ' бит' : '')) : 'скрыто'; }, uniq:true },
+  { label:'Модель устройства', run: async () => { const d = await R.uad; return (d && d.model) ? d.model : 'не сообщается (обычно это ПК)'; } },
+  { label:'Тип устройства', run: () => {
+      const touch = matchMedia('(pointer: coarse)').matches;
+      const any = navigator.maxTouchPoints > 0;
+      return touch ? (any && innerWidth < 900 ? 'телефон / планшет' : 'сенсорный экран') : 'мышь и клавиатура';
+    } },
+  { label:'Язык интерфейса', run: () => navigator.language || '—', uniq:true },
+  { label:'Все языки', run: () => (navigator.languages || []).join(', ') || '—', uniq:true },
+  { label:'Часовой пояс системы', run: () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) { return '—'; } }, uniq:true },
+  { label:'Смещение от UTC', run: () => {
+      const m = -new Date().getTimezoneOffset();
+      const s = (m < 0 ? '−' : '+') + String(Math.floor(Math.abs(m) / 60)).padStart(2,'0') + ':' + String(Math.abs(m) % 60).padStart(2,'0');
+      return 'UTC' + s;
+    } },
+  { label:'Календарь / система счисления', run: () => {
+      try { const o = Intl.DateTimeFormat().resolvedOptions(); return (o.calendar || '—') + ' / ' + (o.numberingSystem || '—'); }
+      catch (e) { return '—'; }
+    } },
+  { label:'Ядер процессора', run: () => navigator.hardwareConcurrency ? navigator.hardwareConcurrency + ' шт.' : 'скрыто', uniq:true },
+  { label:'Оперативной памяти', run: () => navigator.deviceMemory ? '≈ ' + navigator.deviceMemory + ' ГБ' : 'скрыто', uniq:true },
+  { label:'Нажатий на экран одновременно', run: () => String(navigator.maxTouchPoints || 0) },
+  { label:'Куки включены', run: () => navigator.cookieEnabled ? 'да' : 'нет' },
+  { label:'Полный User-Agent', run: () => navigator.userAgent, uniq:true },
+
+  { cat:'ЭКРАН И ГРАФИКА' },
+  { label:'Разрешение экрана', run: () => screen.width + ' × ' + screen.height, uniq:true },
+  { label:'Рабочая область', run: () => screen.availWidth + ' × ' + screen.availHeight },
+  { label:'Размер окна сейчас', run: () => innerWidth + ' × ' + innerHeight },
+  { label:'Плотность пикселей', run: () => (devicePixelRatio || 1) + '×', uniq:true },
+  { label:'Глубина цвета', run: () => (screen.colorDepth || 0) + ' бит' },
+  { label:'Ориентация', run: () => (screen.orientation && screen.orientation.type) || '—' },
+  { label:'Несколько мониторов', run: () => screen.isExtended === undefined ? 'не проверяется' : (screen.isExtended ? 'да, экранов больше одного' : 'один') },
+  { label:'Тёмная тема', run: () => matchMedia('(prefers-color-scheme: dark)').matches ? 'тёмная' : 'светлая' },
+  { label:'Цветовой охват', run: () => matchMedia('(color-gamut: p3)').matches ? 'P3 (широкий)' : matchMedia('(color-gamut: srgb)').matches ? 'sRGB' : 'узкий' },
+  { label:'Уменьшение анимаций', run: () => matchMedia('(prefers-reduced-motion: reduce)').matches ? 'включено' : 'нет' },
+  { label:'Контраст', run: () => matchMedia('(prefers-contrast: more)').matches ? 'повышенный' : 'обычный' },
+
+  { cat:'УНИКАЛЬНАЯ КОМБИНАЦИЯ' },
+  { label:'Производитель видеокарты', run: () => R.gl ? (R.gl.vendor || '—') : 'нет WebGL', uniq:true },
+  { label:'Модель видеокарты', run: () => R.gl ? (R.gl.renderer || '—') : 'нет WebGL', uniq:true },
+  { label:'Отпечаток WebGL', run: () => R.gl ? R.gl.hash.slice(0, 16) : '—', uniq:true },
+  { label:'Честное имя видеокарты', run: () => R.gl ? (R.gl.debugExt ? 'да, расширение доступно' : 'скрыто браузером') : '—' },
+  { label:'Отпечаток canvas', run: () => R.cv ? hash(R.cv).slice(0, 16) : 'заблокирован', uniq:true },
+  { label:'Отпечаток звуковой карты', run: async () => {
+      if (R.af === undefined) R.af = await audioFp();
+      return R.af ? hash(R.af).slice(0, 16) : 'заблокирован';
+    }, uniq:true },
+  { label:'Найдено шрифтов', run: () => {
+      const f = detectFonts(); R.fonts = f;
+      return f.length + ' штук';
+    }, uniq:true },
+  { label:'Какие именно шрифты', run: () => (R.fonts && R.fonts.length) ? R.fonts.slice(0, 12).join(', ') + (R.fonts.length > 12 ? ' …' : '') : '—', uniq:true },
+
+  { cat:'РАЗРЕШЕНИЯ И ХРАНИЛИЩА' },
+  { label:'Геолокация', run: () => perm('geolocation'), warnIf: v => v === 'разрешено' },
+  { label:'Уведомления', run: () => perm('notifications') },
+  { label:'Камера', run: () => perm('camera') },
+  { label:'Микрофон', run: () => perm('microphone') },
+  { label:'Устройства в системе', run: async () => {
+      if (R.md === undefined) R.md = await media();
+      if (!R.md) return 'недоступно';
+      return 'камер: ' + R.md.cam + ', микрофонов: ' + R.md.mic + ', колонок: ' + R.md.spk;
+    } },
+  { label:'Названия устройств', run: () => (R.md && R.md.labels.length) ? R.md.labels.join(' · ') : 'скрыты (нужно разрешение)' },
+  { label:'localStorage / sessionStorage', run: () => {
+      const t = (() => { try { localStorage.setItem('_t','1'); localStorage.removeItem('_t'); return true; } catch (e) { return false; } })();
+      return (t ? 'доступен' : 'запрещён') + ' / ' + (typeof sessionStorage !== 'undefined' ? 'доступен' : 'нет');
+    } },
+  { label:'IndexedDB', run: () => (window.indexedDB ? 'доступен' : 'нет') },
+  { label:'Занято сайтами', run: async () => {
+      if (R.st === undefined) R.st = await storage();
+      if (!R.st || R.st.usage == null) return 'недоступно';
+      const limit = R.st.quota ? ' (лимит ≈ ' + Math.round(R.st.quota / 1073741824) + ' ГБ)' : '';
+      const q = R.st.usage < 1048576
+        ? Math.round(R.st.usage / 1024) + ' КБ'
+        : (R.st.usage / 1048576).toFixed(1) + ' МБ';
+      return q + limit;
+    } },
+  { label:'Батарея', run: async () => {
+      if (R.bat === undefined) R.bat = await battery();
+      if (!R.bat) return 'API недоступно (Firefox / Safari)';
+      return Math.round(R.bat.level * 100) + '%' + (R.bat.charging ? ', на зарядке' : ', от батареи');
+    }, warnIf: v => v.includes('%') },
+  { label:'Тип соединения', run: () => {
+      const c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      if (!c) return 'API недоступно';
+      return [c.effectiveType, c.downlink && c.downlink + ' Мбит/с', c.rtt && c.rtt + ' мс', c.saveData && 'экономия трафика'].filter(Boolean).join(', ');
+    } },
+  { label:'WebRTC (доступен)', run: () => ('RTCPeerConnection' in window ? 'да — может выдать локальный IP' : 'нет'), warnIf: v => v.startsWith('да') },
+  { label:'Do Not Track', run: () => {
+      const d = navigator.doNotTrack || window.doNotTrack;
+      return (d === '1' || d === 'yes') ? 'включён (и сам по себе является признаком)' : 'выключен';
+    } },
+  { label:'Признак автоматизации', run: () => navigator.webdriver ? 'да, это бот/автотест' : 'нет' },
+
+  { cat:'КОСВЕННЫЕ ПРИЗНАКИ' },
+  { label:'Проверка на VPN', run: async () => {
+      const g = await geo();
+      if (!g.ok || !g.d.tz) return 'не проверить без данных о IP';
+      let tzSys = ''; try { tzSys = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) {}
+      if (!tzSys) return '—';
+      return tzSys === g.d.tz ? 'не похоже (пояс совпадает)' : 'подозрительно: система в ' + tzSys + ', а IP в ' + g.d.tz;
+    }, warnIf: v => v.startsWith('подозрительно') },
+  { label:'Язык против страны', run: async () => {
+      const g = await geo();
+      if (!g.ok) return 'не проверить';
+      return 'язык ' + navigator.language + ' при стране ' + gv(g.d,'country') + ' — сопоставь сам';
+    } },
+  { label:'Откуда пришёл', run: () => document.referrer || 'прямой заход (или файл на диске)' },
+  { label:'Как открыта страница', run: () => location.protocol === 'file:' ? 'локальный файл с диска' : location.protocol.replace(':','') + ' — страница из интернета' },
+  { label:'Точное время захода', run: () => new Date().toLocaleString('ru-RU') }
+];
+
+/* ==================== ЗАПУСК ==================== */
+const out = $('out'), boot = $('boot');
+
+function line(html){ const d = document.createElement('div'); d.innerHTML = html; boot.appendChild(d); }
+
+async function run(){
+  $('start').classList.remove('on');
+  out.innerHTML = ''; boot.innerHTML = '';
+  $('counter').textContent = '0 признаков';
+  $('summary').classList.remove('on');
+  $('report').classList.remove('on');
+  $('prog').style.width = '0%';
+
+  const t0 = performance.now();
+
+  // данные, которые считаются один раз и параллельно
+  R.uad = (async () => {
+    if (!navigator.userAgentData) return null;
+    try {
+      return await navigator.userAgentData.getHighEntropyValues(
+        ['platform','platformVersion','architecture','bitness','model','uaFullVersion']);
+    } catch (e) { return null; }
+  })();
+  R.gl = webglInfo();
+  R.cv = canvasFp();
+
+  const boot_lines = [
+    'инициализация сканера отпечатка <b>v1.4</b>',
+    'соединение с браузером <b>установлено</b>',
+    'режим: <b>только чтение · без отправки данных</b>',
+    'запуск зондов <b>' + CHECKS.filter(c => c.label).length + '</b> …'
+  ];
+  for (const l of boot_lines){ line('&gt; ' + l); await sleep(160); }
+
+  // ждём гео-сервис здесь, а не посреди таблицы: иначе скан замер бы на первой же строке
+  line('&gt; опрашиваю сервис геолокации по IP…');
+  const g0 = await guard(geo(), 3500);
+  if (g0 === TIMEOUT){
+    _geo = Promise.resolve({ ok:false, why:'сервис не ответил за 3,5 с' });
+    line('&gt; <b>ответа нет</b> — раздел «Сеть и провайдер» будет пустым');
+  } else if (g0.ok){
+    line('&gt; ответ получен, источник: <b>' + esc(g0.d.src) + '</b>');
+  } else {
+    line('&gt; <b>не вышло</b> — ' + esc(gwhy(g0)));
+  }
+  await sleep(200);
+
+  // все проверки стартуют одновременно, каждая со страховочным таймаутом
+  const jobs = CHECKS.map(c => c.label
+    ? guard(Promise.resolve().then(c.run).catch(() => 'ошибка'), 7000)
+    : null);
+
+  let done = 0, total = CHECKS.filter(c => c.label).length;
+  let uniqCount = 0;
+
+  for (let i = 0; i < CHECKS.length; i++){
+    const c = CHECKS[i];
+    if (!c.label){
+      const h = document.createElement('div');
+      h.className = 'cat'; h.textContent = c.cat;
+      out.appendChild(h);
+      await sleep(90);
+      continue;
+    }
+    let v = await jobs[i];
+    const timedOut = (v === TIMEOUT);
+    if (timedOut) v = 'нет ответа, пропущено';
+    v = (v === null || v === undefined || v === '') ? '—' : String(v);
+
+    const bad = timedOut || (c.warnIf ? c.warnIf(v) : false);
+    const row = document.createElement('div');
+    row.className = 'row' + (bad ? ' warn' : '');
+    row.innerHTML =
+      '<span class="mark">' + (bad ? '[!]' : '[+]') + '</span>' +
+      '<span class="label">' + esc(c.label) + '</span>' +
+      '<span class="dots"></span>' +
+      '<span class="val flash">' + esc(v) + '</span>';
+    out.appendChild(row);
+
+    // «собрано признаков» — только реальные данные, а не заглушки вроде «сервис не ответил»
+    if (!isPlaceholder(v)){
+      done++;
+      if (c.uniq) uniqCount++;
+    }
+    $('prog').style.width = (done / total * 100).toFixed(1) + '%';
+    $('counter').textContent = done + ' признаков';
+    $('phase').textContent = 'зонд: ' + c.label.toLowerCase() + '…';
+    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+
+    await sleep(c.label === 'Полный User-Agent' ? 90 : 42);
+  }
+
+  const secs = ((performance.now() - t0) / 1000).toFixed(1);
+
+  // курсор
+  const cur = document.createElement('div');
+  cur.innerHTML = '<span class="cursor"></span>';
+  out.appendChild(cur);
+
+  // ---- итог ----
+  $('phase').textContent = 'скан завершён';
+  $('prog').style.width = '100%';
+
+  const parts = [
+    R.cv ? hash(R.cv) : 'noc',
+    R.gl ? R.gl.hash : 'nog',
+    R.af || 'noa',
+    screen.width + 'x' + screen.height + '@' + devicePixelRatio,
+    navigator.language + '/' + navigator.languages,
+    (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) { return 'x'; } })(),
+    navigator.hardwareConcurrency + '/' + (navigator.deviceMemory || 0),
+    (R.fonts || []).length
+  ].join('|');
+
+  const id = [0,1,2,3].map(i => hash(i + '::' + parts).slice(0, 4).toUpperCase()).join('-');
+  $('fpid').textContent = id;
+  $('s-total').textContent = done;
+  $('s-uniq').textContent = uniqCount;
+  $('s-time').textContent = secs + 'с';
+
+  const u = uniqCount / total;
+  $('verdict').textContent = u > 0.45
+    ? 'Вывод: у тебя очень «разговорчивое» устройство. Такой набор почти наверняка отличает тебя от большинства других посетителей — даже после чистки куки и в режиме инкогнито.'
+    : u > 0.25
+      ? 'Вывод: устройство вполне обычное, но комбинации этих полей хватает, чтобы уверенно узнавать тебя между заходами. Инкогнито тут не помогает.'
+      : 'Вывод: браузер неплохо защищает — часть данных он скрывает. Но даже оставшегося обычно хватает для узнавания.';
+
+  $('summary').classList.add('on');
+
+  // показываем блок отправки только когда данные реально собраны
+  scanTs = new Date().toISOString();
+  $('report').classList.add('on');
+  setStatus('');
+  renderPreview();
+
+  // Нажатие «начать скан» — это и есть согласие: кнопка прямо говорит,
+  // что отправляет. Поэтому второе нажатие не нужно.
+  sendReport();
+
+  $('summary').scrollIntoView({ behavior:'smooth', block:'center' });
+}
+
+/* ==================== КНОПКИ ==================== */
+$('copy').onclick = async () => {
+  const lines = [];
+  let cur = '';
+  // собираем текст прямо из DOM, сохраняя заголовки категорий
+  for (const el of out.children){
+    if (el.classList.contains('cat')) { cur = el.textContent; lines.push('\n=== ' + cur + ' ==='); }
+    else if (el.classList.contains('row')){
+      const l = el.querySelector('.label').textContent;
+      const v = el.querySelector('.val').textContent;
+      lines.push(l + ': ' + v);
+    }
+  }
+  const text = 'ЦИФРОВОЙ ОТПЕЧАТОК: ' + $('fpid').textContent + '\n' +
+    new Date().toLocaleString('ru-RU') + '\n' + lines.join('\n') +
+    '\n\n(собрано страницей otpechatok.html локально в браузере, никуда не отправлялось)';
+  try {
+    await navigator.clipboard.writeText(text);
+    $('copy').textContent = 'СКОПИРОВАНО ✓';
+  } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); $('copy').textContent = 'СКОПИРОВАНО ✓'; }
+    catch (x) { $('copy').textContent = 'НЕ ВЫШЛО — ВЫДЕЛИ РУКАМИ'; }
+    ta.remove();
+  }
+  setTimeout(() => { $('copy').textContent = 'СКОПИРОВАТЬ ВСЁ'; }, 2200);
+};
+
+$('again').onclick = () => {
+  R.cv = canvasFp(); R.gl = webglInfo(); R.af = undefined;
+  run();
+};
+
+/* ==================== ОТПРАВКА В TELEGRAM ==================== */
+const nickEl = $('nick'), previewEl = $('preview'), sendEl = $('send'), statusEl = $('rstatus');
+
+// Шум, который в чате не нужен: всё это либо дублирует поля выше,
+// либо рассказывает про страницу, а не про человека.
+const SKIP = new Set([
+  'Полный User-Agent',    // ОС, браузер и версия уже разложены по отдельным полям
+  'Какие именно шрифты',  // список из 12 названий — хватает строки «Найдено шрифтов»
+  'Названия устройств',   // почти всегда «скрыты (нужно разрешение)»
+  'Откуда взяты данные'   // это про сервис, а не про посетителя
+]);
+
+// Берём только те строки, где реально есть данные: заглушки вроде
+// «сервис не ответил» отправлять бессмысленно.
+// Категория едет третьим элементом, а не приклеена к метке: в сообщении
+// она станет отдельным заголовком и сэкономит ~1200 символов.
+function collectFields(){
+  const fields = [];
+  let cat = '';
+  for (const el of out.children){
+    if (el.classList.contains('cat')) { cat = el.textContent; continue; }
+    if (!el.classList.contains('row')) continue;
+    const label = el.querySelector('.label').textContent;
+    const value = el.querySelector('.val').textContent;
+    if (!value || isPlaceholder(value) || SKIP.has(label)) continue;
+    fields.push([label, value, cat]);
+  }
+  return fields;
+}
+
+// Формат обязан совпадать с buildMessage() в worker.js — иначе предпросмотр врёт
+function buildReport(){
+  // поле ника могло быть удалено из разметки — тогда просто пусто
+  const nick = nickEl ? nickEl.value.trim().slice(0, 32) : '';
+  const ts = scanTs || new Date().toISOString();
+  const fpId = $('fpid').textContent;
+  const fields = collectFields();
+
+  const body = [];
+  let cat = '';
+  for (const [label, value, c] of fields){
+    if (c && c !== cat){ cat = c; body.push('', '▸ ' + c); }
+    body.push(label + ': ' + value);
+  }
+  const text = [
+    '🖐 Отчёт со страницы «Отпечаток»',
+    'Кто: ' + (nick || 'без ника'),
+    'Скан сделан: ' + ts,
+    'Отпечаток: ' + fpId,
+    ...body
+  ].join('\n');
+  return { nick, ts, fpId, fields, text };
+}
+
+function renderPreview(){
+  const r = buildReport();
+  previewEl.textContent = r.fields.length ? r.text : 'пока нечего отправлять — скан ещё не закончился';
+}
+
+function setStatus(msg, cls){
+  statusEl.textContent = msg;
+  statusEl.className = 'rstatus ' + (cls || '');
+}
+
+if (nickEl) nickEl.addEventListener('input', renderPreview);
+
+async function sendReport(){
+  const r = buildReport();
+  if (!r.fields.length){ setStatus('отправлять нечего — дождись конца скана', 'err'); return false; }
+  if (REPORT_URL.indexOf('<') !== -1){
+    setStatus('адрес воркера не вписан: замени REPORT_URL в начале скрипта на свой', 'err');
+    return false;
+  }
+
+  sendEl.disabled = true;
+  setStatus('отправляю…', 'wait');
+  try {
+    const res = await fetch(REPORT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nick: r.nick, fpId: r.fpId, ts: r.ts, fields: r.fields })
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || !j.ok) throw new Error(j.error || ('HTTP ' + res.status));
+    setStatus('ушло ✓ полей в сообщении: ' + (j.fields || r.fields.length), 'ok');
+    return true;
+  } catch (e) {
+    setStatus('не вышло: ' + e.message, 'err');
+    return false;
+  } finally {
+    sendEl.disabled = false;
+  }
+}
+
+sendEl.onclick = () => sendReport();
+
+function tick(){
+  $('clock').textContent = new Date().toLocaleTimeString('ru-RU');
+}
+tick(); setInterval(tick, 1000);
+
+/* Скан запускается только по кнопке: страница при заходе не снимает
+   ничего, пока человек сам не решит. */
+$('go').onclick = () => { $('go').disabled = true; run(); };
+$('start').classList.add('on');
+$('phase').textContent = 'скан не запущен';
+</script>
+</body>
+</html>

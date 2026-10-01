@@ -1,0 +1,13 @@
+name = "otpechatok-relay"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+# BOT_TOKEN и CHAT_ID здесь НЕ пишутся — они кладутся секретами:
+#   npx wrangler secret put BOT_TOKEN
+#   npx wrangler secret put CHAT_ID
+
+[vars]
+# С какого домена странице разрешено обращаться к воркеру.
+# По умолчанию "*" — годится, пока страница открывается как локальный файл.
+# Если выложишь её в интернет, впиши свой домен, например:
+# ALLOWED_ORIGIN = "https://example.com"
